@@ -1,8 +1,8 @@
 """
-CHP Steenwijk — TESPy Plant Performance App (same tab structure as original)
+CHP Steenwijk — TESPy-Native Plant Performance App (same tab structure as original)
 Run with:
-    pip install streamlit tespy plotly pandas matplotlib
-    streamlit run app_tespy_same_structure.py
+    pip install streamlit CoolProp plotly pandas numpy
+    streamlit run app_improved_same_structure.py
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import streamlit as st
 
 from tespy_engine_chp import analyse_cycle, compute_scenario, SCENARIO_DEFS
 
-st.set_page_config(page_title="CHP Steenwijk — TESPy Plant Performance", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="CHP Steenwijk — TESPy-Native Plant Performance", layout="wide", page_icon="🔥")
 
 # ═══════════════════════════════════════════════
 # SIDEBAR: All Inputs
@@ -116,8 +116,8 @@ tabs = st.tabs(tab_names)
 # TAB 0: OVERVIEW
 # ═══════════════════════════════════════════════
 with tabs[0]:
-    st.title("CHP Steenwijk — TESPy Plant Performance")
-    #st.markdown("**Same app structure as the original, with improved thermodynamics, auxiliaries, part-load treatment, and corrected transformer logic.**")
+    st.title("CHP Steenwijk — TESPy-Native Plant Performance")
+    #st.markdown("**Same app structure as the original, with all scenarios solved from a TESPy network.**")
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Baseline Gross Power", f"{baseline.P_gross:.0f} kW", f"HP {baseline.P_HP:.0f} + LP {baseline.P_LP:.0f}")
@@ -170,7 +170,7 @@ with tabs[0]:
         )
 
     st.markdown("### Full Comparison Table")
-    table_formats = {
+    st.dataframe(df.style.format({
         'P_cond used (bar)': '{:.2f}',
         'P_HP (kW)': '{:.0f}', 'P_LP (kW)': '{:.0f}', 'P_Exp (kW)': '{:.0f}',
         'P_Gross (kW)': '{:.0f}', 'P_Aux (kW)': '{:.0f}', 'P_Net (kW)': '{:.0f}',
@@ -179,16 +179,8 @@ with tabs[0]:
         'η_HP eff (%)': '{:.1f}', 'η_LP eff (%)': '{:.1f}', 'η_Exp eff (%)': '{:.1f}',
         'η_elec gross (%)': '{:.1f}', 'η_elec net (%)': '{:.1f}', 'η_CHP (%)': '{:.1f}',
         'Heat to factory (kW)': '{:.0f}', 'Biomass (t/h)': '{:.2f}', 'Biomass (t/yr)': '{:,.0f}',
-    }
-
-    styled_df = df.style.format(table_formats)
-    try:
-        import matplotlib  # noqa: F401
-        styled_df = styled_df.background_gradient(subset=['ΔP vs S1 (kW)'], cmap='RdYlGn')
-    except Exception:
-        st.caption("Gradient coloring is disabled because matplotlib is not available in this deployment.")
-
-    st.dataframe(styled_df, use_container_width=True, height=470)
+    }).background_gradient(subset=['ΔP vs S1 (kW)'], cmap='RdYlGn'),
+    use_container_width=True, height=470)
 
     st.markdown("### Efficiency Comparison")
     fig3 = go.Figure()
@@ -360,25 +352,33 @@ with tabs[-1]:
     st.header("📐 Methodology")
 
     st.markdown("""
-    ### Thermodynamic Framework
+    ### TESPy-native thermodynamic framework
 
-    This version uses a **TESPy-based steam-cycle model** for the CHP turbine train.
-    The thermodynamic core represents:
-    1. **Live steam source → HP turbine**
-    2. **One extraction split** at the extraction pressure
-    3. **LP turbine** on the condensing branch
-    4. **Optional LP screw expander** on the extraction branch
-    5. **Main condenser** with cooling-water duty on the condensing branch
+    This version solves each scenario with a **TESPy network**, not with a manual
+    enthalpy-drop calculator. The network includes:
 
-    The Streamlit layout and visuals are intentionally kept the same as the earlier app.
-    Useful heat in expander cases uses the **post-expander enthalpy**, and net export is calculated as **gross power minus auxiliary loads**.
+    1. **Steam generator**
+    2. **HP turbine**
+    3. **One extraction split**
+    4. **LP condensing branch**
+    5. **Optional LP expander on extraction steam**
+    6. **Main condenser and process heat exchanger**
+    7. **Condensate pumps, condensate merge, and feedwater conditioning**
+
+    The app layout is unchanged, but the scenario results now come from TESPy's
+    component and network balances.
     """)
 
     states_data = {
         "Point": ["1", "2s", "2", "3s", "3", "3e", "4"],
         "Description": [
-            "Live steam (boiler exit)", "Isentropic HP exhaust", "Actual HP exhaust",
-            "Isentropic LP exhaust", "Actual LP exhaust", "LP expander exhaust", "Feedwater"
+            "Live steam (steam generator outlet)",
+            "Isentropic HP exhaust reference",
+            "Actual HP exhaust / extraction header",
+            "Isentropic LP exhaust reference",
+            "Actual LP exhaust to condenser",
+            "Actual LP expander exhaust reference",
+            "Process-return condensate reference",
         ],
         "P (bar)": [
             base_cycle.state1.P_bar, base_cycle.state2s.P_bar, base_cycle.state2.P_bar,
@@ -393,56 +393,75 @@ with tabs[-1]:
             base_cycle.state3s.h_kJkg, base_cycle.state3.h_kJkg, base_cycle.state3e.h_kJkg, base_cycle.state4.h_kJkg
         ],
         "How computed": [
-            f"Known: P={P_live} bar, T={T_live}°C",
-            f"Isentropic: s₂s = s₁ = {base_cycle.state1.s_kJkgK:.4f}",
-            f"η_HP={eta_HP:.0%}: h₂ = h₁ − η(h₁−h₂s)",
-            f"Isentropic: s₃s = s₂ = {base_cycle.state2.s_kJkgK:.4f}",
-            f"η_LP={eta_LP:.0%}: h₃ = h₂ − η(h₂−h₃s)",
-            f"η_exp={eta_exp:.0%}: h₃e = h₂ − η(h₂−h₃s)",
-            f"Known: P={P_live} bar, T={T_fw}°C",
+            f"TESPy live-steam boundary: P={P_live} bar, T={T_live}°C",
+            "TESPy single-stage reference solve with η=1.0 to extraction pressure",
+            f"TESPy HP turbine solve with η_HP={eta_HP:.0%}",
+            "TESPy single-stage reference solve with η=1.0 to condenser pressure",
+            f"TESPy LP turbine solve with η_LP={eta_LP:.0%}",
+            f"TESPy expander reference solve with η_exp={eta_exp:.0%}",
+            "TESPy process heat exchanger outlet / condensate return state",
         ],
     }
     st.dataframe(pd.DataFrame(states_data).style.format({
         'P (bar)': '{:.2f}', 'T (°C)': '{:.1f}', 'h (kJ/kg)': '{:.1f}'
     }), use_container_width=True)
 
-    st.markdown(f"""
-    ### Power Equation
+    boiler_h = base_cycle.boiler_inlet.h_kJkg if base_cycle.boiler_inlet else float('nan')
+    boiler_t = base_cycle.boiler_inlet.T_C if base_cycle.boiler_inlet else float('nan')
+    boiler_p = base_cycle.boiler_inlet.P_bar if base_cycle.boiler_inlet else float('nan')
 
-    For each turbine/expander section:
+    st.markdown(f"""
+    ### Power equation shown in the scenario tabs
+
+    For each power-producing section:
 
     $$P [kW] = \dot{{m}} [t/h] \times \Delta h [kJ/kg] \times \eta_{{gen}} / 3.6$$
 
-    ### Net Export Equation
+    In the rebuilt app, the **displayed section powers** come from **TESPy component
+    powers**, while the equation above is retained in the UI as an engineering
+    interpretation of the solved result.
+
+    ### Steam generator duty
+
+    The boiler-side steam duty is taken from the **TESPy steam generator heat duty**.
+    Fuel input is then calculated as:
+
+    $$Q_{{fuel}} = Q_{{steam\,generator}} / \eta_{{boiler}}$$
+
+    Current reference boiler-inlet state from TESPy:
+
+    - Pressure: **{boiler_p:.2f} bar**
+    - Temperature: **{boiler_t:.1f} °C**
+    - Enthalpy: **{boiler_h:.1f} kJ/kg**
+
+    ### Specific work values (reference cycle)
+
+    | Section | Δh (kJ/kg) | Basis |
+    |---|---|---|
+    | HP turbine | **{base_cycle.w_HP:.1f}** | TESPy live steam to HP outlet |
+    | LP turbine | **{base_cycle.w_LP:.1f}** | TESPy HP outlet to LP outlet |
+    | LP expander | **{base_cycle.w_exp:.1f}** | TESPy HP outlet to expander outlet |
+    | Process heat (direct extraction) | **{base_cycle.q_heat_direct:.1f}** | TESPy process HX duty / extraction mass flow |
+    | Process heat (post-expander) | **{base_cycle.q_heat_post_expander:.1f}** | TESPy post-expander process HX duty / extraction mass flow |
+
+    ### Net export equation
 
     $$P_{{net}} = P_{{gross}} - P_{{aux}}$$
     $$P_{{export}} = \min(P_{{net}}, P_{{transformer}})$$
 
-    ### Specific Work Values (reference cycle)
-
-    | Section | Δh (kJ/kg) | Efficiency |
-    |---|---|---|
-    | HP turbine | **{base_cycle.w_HP:.1f}** | η_HP,design = {eta_HP:.0%} |
-    | LP turbine | **{base_cycle.w_LP:.1f}** | η_LP,design = {eta_LP:.0%} |
-    | LP expander | **{base_cycle.w_exp:.1f}** | η_exp,design = {eta_exp:.0%} |
-    | Heat content (direct extraction) | **{base_cycle.q_heat_direct:.1f}** | h₂ − h₄ |
-    | Heat content (post-expander) | **{base_cycle.q_heat_post_expander:.1f}** | h₃e − h₄ |
-
-    ### Transformer Limit
+    ### Transformer limit
 
     Total export is capped at the transformer rating ({trafo:.0f} kW).
-    Curtailment is calculated **dynamically** from model results. For the current settings, curtailed scenarios are: **{curtailed_label}**.
+    Curtailment is calculated dynamically from model results. For the current settings,
+    curtailed scenarios are: **{curtailed_label}**.
 
-    ### Summer Backpressure Correction for S4
+    ### Summer backpressure correction for S4
 
-    S4 uses a higher condenser pressure than the reference case and assumes all condenser fans at full duty.
-    That gives a more realistic summer representation than only reducing availability.
+    S4 uses a higher condenser pressure than the reference case and assumes all
+    condenser fans at full duty.
 
-    ### Biomass Consumption
+    ### Biomass consumption
 
-    $$\text{{ratio}} = \frac{{h_1 - h_4}}{{\eta_{{boiler}} \times LHV}}$$
-
-    With the current reference settings:
-
-    $$\text{{ratio}} = \frac{{{base_cycle.state1.h_kJkg:.1f} - {base_cycle.state4.h_kJkg:.1f}}}{{{eta_boiler:.2f} \times {LHV*1000:.0f}}} = {(base_cycle.state1.h_kJkg - base_cycle.state4.h_kJkg)/(eta_boiler * LHV * 1000):.4f} \text{{ t biomass / t steam}}$$
+    Biomass use is linked to the TESPy steam-generator duty using the boiler efficiency
+    and biomass LHV entered in the app.
     """)
