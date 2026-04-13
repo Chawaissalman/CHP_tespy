@@ -16,7 +16,7 @@ import numpy as np
 import streamlit as st
 from pathlib import Path
 
-from thermo_engine_tespy import analyse_cycle, compute_scenario, SCENARIO_DEFS
+from tespy_engine_chp import analyse_cycle, compute_scenario, SCENARIO_DEFS
 from economics_figures import (
     build_scenario_dataframe_from_engine, enrich_dataframe, generate_figures,
     DEFAULT_FINANCIALS, DEFAULT_OM, DEFAULT_CONFIG,
