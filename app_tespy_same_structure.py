@@ -27,7 +27,7 @@ from economics_figures import (
     FG_NM3PH_DEFAULT, BAG_UTIL_DEFAULT, FAN_UTIL_DEFAULT,
 )
 
-st.set_page_config(page_title="CHP Steenwijk — TESPy v2", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="CHP Steenwijk Techno-Economic model", layout="wide", page_icon="🔥")
 
 # ═══════════════════════════════════════════════
 # SIDEBAR: Global cycle parameters
@@ -242,7 +242,7 @@ curtailed_label = ", ".join(curtailed_ids) if curtailed_ids else "none"
 # TAB 0: OVERVIEW (uses computed results)
 # ═══════════════════════════════════════════════
 with tabs[0]:
-    st.title("CHP Steenwijk — TESPy Plant Performance (v2: Editable)")
+    st.title("CHP Steenwijk — Techno-Economic Model")
     st.caption("Edit scenario parameters in each tab. Overview updates automatically.")
 
     col1, col2, col3, col4 = st.columns(4)
